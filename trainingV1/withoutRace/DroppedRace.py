@@ -23,8 +23,8 @@ pd.set_option('display.max_columns', None)
 print("Libraries Imported Successfully")
 
 # %%
-tcga_df = pd.read_csv('TCGA_InfoWithGrade.csv')
-cgga_df = pd.read_csv('weseq_processed_with_id_and_race_V2.csv')
+tcga_df = pd.read_csv('dataset/TCGA_InfoWithGrade.csv')
+cgga_df = pd.read_csv('dataset/weseq_processed_with_id_and_race_V2.csv')
 
 # %%
 tcga_df
@@ -275,6 +275,45 @@ class ModelTrainer:
         print("Training completed!")
     
     def evaluate(self, X_sets, y_sets, set_names):
+        print(f"\nEvaluating {self.model_name}...")
+        evaluation_results = {}
+        
+        for i, (X, y) in enumerate(zip(X_sets, y_sets)):
+            set_name = set_names[i]
+            y_pred = self.model.predict(X)
+            
+            accuracy = accuracy_score(y, y_pred)
+            precision = precision_score(y, y_pred, average='weighted')
+            recall = recall_score(y, y_pred, average='weighted')
+            f1 = f1_score(y, y_pred, average='weighted')
+            
+            # ==========================================================
+            # MODIFIED PART: ROC AUC Fallback Logic
+            # ==========================================================
+            roc_auc = None
+            try:
+                if hasattr(self.model, "predict_proba"):
+                    # Use probabilities for Forest/Boost/LogReg models
+                    y_score = self.model.predict_proba(X)[:, 1]
+                elif hasattr(self.model, "decision_function"):
+                    # Fallback to raw scores for RidgeClassifier
+                    y_score = self.model.decision_function(X)
+                else:
+                    y_score = None
+
+                if y_score is not None and len(np.unique(y)) > 1:
+                    roc_auc = roc_auc_score(y, y_score)
+            except Exception as e:
+                print(f"      Note: Could not calculate ROC AUC for {self.model_name}: {e}")
+            # ==========================================================
+            
+            cm = confusion_matrix(y, y_pred)
+            evaluation_results[set_name] = {
+                'accuracy': accuracy, 'precision': precision, 'recall': recall,
+                'f1': f1, 'roc_auc': roc_auc, 'confusion_matrix': cm
+            }
+        self.results['evaluation'] = evaluation_results
+        return evaluation_results
         """Evaluate model on multiple datasets"""
         print(f"\nEvaluating {self.model_name}...")
         
@@ -777,11 +816,11 @@ for model in comparison_df['Model'].unique():
     
     diff = cv_f1 - test_f1
     if diff > 0.15:
-        status = "⚠️ HIGH OVERFITTING"
+        status = "HIGH OVERFITTING"
     elif diff > 0.05:
-        status = "⚠️ Moderate overfitting"
+        status = "Moderate overfitting"
     elif diff < -0.05:
-        status = "⚠️ Underfitting"
+        status = "Underfitting"
     else:
         status = "✓ Good generalization"
     
