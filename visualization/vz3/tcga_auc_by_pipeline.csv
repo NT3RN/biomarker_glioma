@@ -1,0 +1,5 @@
+Pipeline,mean,std
+ROS,0.8669,0.0439
+No Balancing,0.8648,0.0428
+SMOTE,0.862,0.0399
+CTGAN,0.8446,0.0239
